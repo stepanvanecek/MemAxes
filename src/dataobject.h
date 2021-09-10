@@ -51,11 +51,13 @@
 #include "util.h"
 #include "console.h"
 
+#include "Topology.hpp"
+
 #define INVISIBLE false
 #define VISIBLE true
 
-class hwTopo;
-class hwNode;
+// class hwTopo;
+// class hwNode;
 class console;
 
 typedef unsigned long long ElemIndex;
@@ -91,7 +93,7 @@ public:
     DataObject();
 
 
-    hwTopo *getTopo() { return topo; }
+    // hwTopo *getTopo() { return topo; }
     int loadHardwareTopology(QString filename);
     bool empty() { return numElements == 0; }
 
@@ -132,7 +134,7 @@ public:
     void selectByMultiDimRange(QVector<int> dims, QVector<qreal> mins, QVector<qreal> maxes, int group = 1);
     void selectBySourceFileName(QString str, int group = 1);
     void selectByVarName(QString str, int group = 1);
-    void selectByResource(hwNode *node, int group = 1);
+    void selectByResource(Component *c, int group = 1);
 
     ElemSet& getSelectionSet(int group = 1) { return selectionSets.at(group); }
 
@@ -146,9 +148,9 @@ public:
     qreal maxAt(int d) const { return maximumValues[d]; }
     qreal meanAt(int d) const { return meanValues[d]; }
     qreal stddevAt(int d) const { return standardDeviations[d]; }
-    qreal covarianceBtwn(int d1,int d2) const 
+    qreal covarianceBtwn(int d1,int d2) const
         { return covarianceMatrix[ROWMAJOR_2D(d1,d2,numDimensions)]; }
-    qreal correlationBtwn(int d1,int d2) const 
+    qreal correlationBtwn(int d1,int d2) const
         { return correlationMatrix[ROWMAJOR_2D(d1,d2,numDimensions)]; }
 
     // Hierarchical clustering
@@ -156,7 +158,8 @@ public:
 
 public:
     QStringList meta;
-    hwTopo *topo;
+    Topology *topo;
+    Chip* cpu;//TODO only temporary fix - prepare for more cpus, i.e. delete this member
 
     // Counts
     ElemIndex numDimensions;

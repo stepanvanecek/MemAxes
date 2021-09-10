@@ -43,6 +43,8 @@
 #include <algorithm>
 #include <functional>
 
+#include "hwloc.hpp"
+
 #include <QFile>
 #include <QTextStream>
 
@@ -61,19 +63,44 @@ DataObject::DataObject()
 
 int DataObject::loadHardwareTopology(QString filename)
 {
-    topo = new hwTopo();
-    int err = topo->loadHardwareTopologyFromXML(filename);
+    qDebug( "loadHardwareTopology" );
+
+    topo = new Topology();
+    int err = addParsedHwlocTopo(topo, filename.toUtf8().constData(), 1); //adds topo to a next node
+    //topo->PrintSubtree(0);
+
+    //TODO temporary CPU
+    cpu = (Chip*)(topo->GetChild(0)->GetChild(1));
+
+
+    //create empty metadata items "sampleSets" and "transactions" for each Compoenent
+    vector<Component*> allComponents;
+    cpu->GetSubtreeNodeList(&allComponents);
+    qDebug( "loadHardwareTopology = %lu", allComponents.size());
+    for(int i=0; i<allComponents.size(); i++)
+    {
+        allComponents[i]->metadata["sampleSets"] = (void*) new QMap<DataObject*,SampleSet>();
+        allComponents[i]->metadata["transactions"] = (void*) new int();
+        qDebug( "collectTopoSamplesxx = %p", allComponents[i]->metadata["sampleSets"]);
+    }
     return err;
+    // topo = new hwTopo();
+    // int err = topo->loadHardwareTopologyFromXML(filename);
+    // return err;
 }
 
 int DataObject::loadData(QString filename)
 {
+    qDebug( "C Style Debug Message" );
     int err = parseCSVFile(filename);
+    qDebug( "loadData - error %d", err);
     if(err)
         return err;
 
     calcStatistics();
+    qDebug( "loadData2");
     constructSortedLists();
+    qDebug( "loadData3");
 
     return 0;
 }
@@ -311,9 +338,10 @@ void DataObject::selectByVarName(QString str, int group)
     selectSet(selSet,group);
 }
 
-void DataObject::selectByResource(hwNode *node, int group)
+void DataObject::selectByResource(Component *c, int group)
 {
-    selectSet(node->sampleSets[this].totSamples,group);
+    selectSet( (*((QMap<DataObject*,SampleSet>*)c->metadata["sampleSets"]))[this].totSamples, group);
+    //selectSet(node->sampleSets[this].totSamples,group);
 }
 
 void DataObject::hideSelected()
@@ -384,59 +412,91 @@ void DataObject::selectSet(ElemSet &s, int group)
 void DataObject::collectTopoSamples()
 {
     // Reset info
-    for(int i=0; i<topo->allHardwareResourceNodes.size(); i++)
+    vector<Component*> allComponents;
+    cpu->GetSubtreeNodeList(&allComponents);
+    qDebug( "cpu [%d] = %p", cpu->GetComponentType(), cpu);
+
+    qDebug( "collectTopoSamples");
+    map<int,Thread*> threadIdMap;
+    for(int i=0; i<allComponents.size(); i++)
     {
-        topo->allHardwareResourceNodes[i]->sampleSets[this].totCycles = 0;
-        topo->allHardwareResourceNodes[i]->sampleSets[this].selCycles = 0;
-        topo->allHardwareResourceNodes[i]->sampleSets[this].totSamples.clear();
-        topo->allHardwareResourceNodes[i]->sampleSets[this].selSamples.clear();
-        topo->allHardwareResourceNodes[i]->transactions = 0;
+        if(allComponents[i]->GetComponentType() == SYS_TOPO_COMPONENT_THREAD)
+        {
+            threadIdMap[allComponents[i]->GetId()] = (Thread*)allComponents[i];
+            qDebug( "threadIdMap [%d] = %p", allComponents[i]->GetId(), (Thread*)allComponents[i]);
+        }
     }
+    qDebug( "collectTopoSamples1 = %lu", allComponents.size());
+
+
+    for(int i=0; i<allComponents.size(); i++)
+    {
+        qDebug( "collectTopoSamplesxx = %p", allComponents[i]->metadata["sampleSets"]);
+        QMap<DataObject*,SampleSet>* sampleSets = (QMap<DataObject*,SampleSet>*)allComponents[i]->metadata["sampleSets"];
+        (*sampleSets)[this].totCycles = 0;
+        (*sampleSets)[this].selCycles = 0;
+        (*sampleSets)[this].totSamples.clear();
+        (*sampleSets)[this].selSamples.clear();
+        *(int*)(allComponents[i]->metadata["transactions"]) = 0;
+        // topo->allHardwareResourceNodes[i]->sampleSets[this].totCycles = 0;
+        // topo->allHardwareResourceNodes[i]->sampleSets[this].selCycles = 0;
+        // topo->allHardwareResourceNodes[i]->sampleSets[this].totSamples.clear();
+        // topo->allHardwareResourceNodes[i]->sampleSets[this].selSamples.clear();
+        // topo->allHardwareResourceNodes[i]->transactions = 0;
+    }
+    qDebug( "collectTopoSamples2");
 
     // Go through each sample and add it to the right topo node
     ElemIndex elem;
     QVector<qreal>::Iterator p;
     for(elem=0, p=this->begin; p!=this->end; elem++, p+=this->numDimensions)
     {
+        //qDebug( "collectTopoSamples loop2 %d", elem);
+
         // Get vars
         int dse = *(p+dataSourceDim);
         int cpu = *(p+cpuDim);
         int cycles = *(p+latencyDim);
+        //qDebug( "collectTopoSamples cpu= %d cpuDim= %d topo->CPUIDMap.size()=%d", cpu, cpuDim, topo->CPUIDMap.size());
 
         // Search for nodes
-        hwNode *cpuNode = topo->CPUIDMap[cpu];
-        hwNode *node = cpuNode;
+        Thread* t = threadIdMap[cpu];
+        qDebug( "cxx = %p", t);
+
 
         // Update data for serving resource
-        node->sampleSets[this].totSamples.insert(elem);
-        node->sampleSets[this].totCycles += cycles;
+        QMap<DataObject*,SampleSet>*sampleSets = (QMap<DataObject*,SampleSet>*)t->metadata["sampleSets"];
+        (*sampleSets)[this].totSamples.insert(elem);
+        (*sampleSets)[this].totCycles += cycles;
 
         if(!selectionDefined() || selected(elem))
         {
-            node->sampleSets[this].selSamples.insert(elem);
-            node->sampleSets[this].selCycles += cycles;
+            (*sampleSets)[this].selSamples.insert(elem);
+            (*sampleSets)[this].selCycles += cycles;
         }
 
         if(dse == -1)
             continue;
 
         // Go up to data source
-        for( /*init*/; dse>0 && node->parent; dse--, node=node->parent)
+        Component* c;
+        for(c = (Component*)t; dse>0 && c->GetParent() && c->GetComponentType() != SYS_TOPO_COMPONENT_CHIP ; dse--, c=c->GetParent())
         {
             if(!selectionDefined() || selected(elem))
             {
-                node->transactions++;
+                *(int*)(c->metadata["transactions"])+= 1;
             }
         }
 
         // Update data for core
-        node->sampleSets[this].totSamples.insert(elem);
-        node->sampleSets[this].totCycles += cycles;
+        sampleSets = (QMap<DataObject*,SampleSet>*)c->metadata["sampleSets"];
+        (*sampleSets)[this].totSamples.insert(elem);
+        (*sampleSets)[this].totCycles += cycles;
 
         if(!selectionDefined() || selected(elem))
         {
-            node->sampleSets[this].selSamples.insert(elem);
-            node->sampleSets[this].selCycles += cycles;
+            (*sampleSets)[this].selSamples.insert(elem);
+            (*sampleSets)[this].selCycles += cycles;
         }
     }
 }
@@ -463,7 +523,7 @@ int DataObject::parseCSVFile(QString dataFileName)
     sourceDim = this->meta.indexOf("source");
     lineDim = this->meta.indexOf("line");
     variableDim = this->meta.indexOf("variable");
-    dataSourceDim = this->meta.indexOf("dataSource");
+    dataSourceDim = this->meta.indexOf("data_src");
     indexDim = this->meta.indexOf("index");
     latencyDim = this->meta.indexOf("latency");
     nodeDim = this->meta.indexOf("node");
@@ -471,7 +531,6 @@ int DataObject::parseCSVFile(QString dataFileName)
     xDim = this->meta.indexOf("xidx");
     yDim = this->meta.indexOf("yidx");
     zDim = this->meta.indexOf("zidx");
-
 
     QVector<QString> varVec;
     QVector<QString> sourceVec;
@@ -658,7 +717,7 @@ void DataObject::constructSortedLists()
 
 qreal distanceHardware(DataObject *d, ElemSet *s1, ElemSet *s2)
 {
-    int cpuDepth = d->getTopo()->totalDepth;
+    int cpuDepth = d->cpu->GetTopoTreeDepth();
     int dseDepth;
 
     // Vars
