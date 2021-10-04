@@ -222,7 +222,7 @@ void HWTopoVizWidget::mouseMoveEvent(QMouseEvent* e)
         int numSamples = 0;
         QMap<DataObject*,SampleSet>*sampleSets = (QMap<DataObject*,SampleSet>*)c->metadata["sampleSets"];
         numSamples += (*sampleSets)[dataSet].selSamples.size();
-        numSamples += (*sampleSets)[dataSet].selCycles;
+        numCycles += (*sampleSets)[dataSet].selCycles;
 
         label += "Samples: " + QString::number(numSamples) + "\n";
         label += "Cycles: " + QString::number(numCycles) + "\n";

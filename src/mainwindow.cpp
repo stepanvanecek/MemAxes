@@ -39,6 +39,7 @@
 #include "ui_form.h"
 #include "mainwindow.h"
 
+#include <unistd.h>
 #include <iostream>
 using namespace std;
 
@@ -251,7 +252,7 @@ int MainWindow::loadData()
     qDebug( "mld4");
     visibilityChangedSlot();
     qDebug( "mld5");
-
+    usleep(1000000);
     return 0;
 }
 

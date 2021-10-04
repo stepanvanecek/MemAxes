@@ -457,15 +457,14 @@ void DataObject::collectTopoSamples()
         int dse = *(p+dataSourceDim);
         int cpu = *(p+cpuDim);
         int cycles = *(p+latencyDim);
-        //qDebug( "collectTopoSamples cpu= %d cpuDim= %d topo->CPUIDMap.size()=%d", cpu, cpuDim, topo->CPUIDMap.size());
+
 
         // Search for nodes
         Thread* t = threadIdMap[cpu];
-        qDebug( "cxx = %p", t);
-
 
         // Update data for serving resource
         QMap<DataObject*,SampleSet>*sampleSets = (QMap<DataObject*,SampleSet>*)t->metadata["sampleSets"];
+        qDebug( "--%llu collectTopoSamples cpu= %d cpuIndex= %d samples: %d cycles %d dse: %d", elem, cpu, cpuDim, (*sampleSets)[this].totSamples.size(), (*sampleSets)[this].totCycles, dse );
         (*sampleSets)[this].totSamples.insert(elem);
         (*sampleSets)[this].totCycles += cycles;
 
@@ -477,14 +476,34 @@ void DataObject::collectTopoSamples()
 
         if(dse == -1)
             continue;
+        //dse== 1 ->L1 Cache
+        //      2 ->L2
+        //      3 ->L3
+        //      4 ->main mem.
 
         // Go up to data source
         Component* c;
-        for(c = (Component*)t; dse>0 && c->GetParent() && c->GetComponentType() != SYS_TOPO_COMPONENT_CHIP ; dse--, c=c->GetParent())
+        for(c = (Component*)t; c->GetParent() && c->GetComponentType() != SYS_TOPO_COMPONENT_CHIP ; c=c->GetParent())
         {
             if(!selectionDefined() || selected(elem))
             {
                 *(int*)(c->metadata["transactions"])+= 1;
+                qDebug( "---%llu chip: %d  transactions: %d dse %d", elem, c->GetComponentType(), *(int*)(c->metadata["transactions"]), dse);
+
+            }
+
+            volatile int type = c->GetComponentType();
+            if(type == SYS_TOPO_COMPONENT_CACHE)
+            {
+                qDebug("cache %d dse %d", ((Cache*)c)->GetCacheLevel(), dse);
+            }
+
+            if((type == SYS_TOPO_COMPONENT_CACHE && ((Cache*)c)->GetCacheLevel() == 1 && dse == 1) ||
+                    (type == SYS_TOPO_COMPONENT_CACHE && ((Cache*)c)->GetCacheLevel() == 2 && dse == 2) ||
+                    (type == SYS_TOPO_COMPONENT_CACHE && ((Cache*)c)->GetCacheLevel() == 3 && dse == 3) ||
+                    (type == SYS_TOPO_COMPONENT_NUMA && dse == 4))
+            {
+                break;
             }
         }
 
@@ -566,8 +585,10 @@ int DataObject::parseCSVFile(QString dataFileName)
             }
             else if(i==dataSourceDim)
             {
-                int dseVal = tok.toInt(NULL,16);
-                this->vals.push_back(dseDepth(dseVal));
+                int dseVal = tok.toInt(NULL,10);
+                int dse = dseDepth(dseVal);
+                qDebug("elem %d dseVal %d dse %d", elemid, dseVal, dse);
+                this->vals.push_back(dse);
             }
             else
             {
