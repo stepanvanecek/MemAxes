@@ -55,7 +55,7 @@ DataObject::DataObject()
     numSelected = 0;
     numVisible = 0;
 
-    topo = NULL;
+    node = NULL;
 
     selMode = MODE_NEW;
     selGroup = 1;
@@ -65,12 +65,12 @@ int DataObject::loadHardwareTopology(QString filename)
 {
     qDebug( "loadHardwareTopology" );
 
-    topo = new Topology();
-    int err = addParsedHwlocTopo(topo, filename.toUtf8().constData(), 1); //adds topo to a next node
+    node = new Node(0);
+    int err = parseHwlocOutput(node, filename.toUtf8().constData()); //adds topo to a next node
     //topo->PrintSubtree(0);
 
     //TODO temporary CPU
-    cpu = (Chip*)(topo->GetChild(0)->GetChild(1));
+    cpu = (Chip*)(node->GetChild(1));
 
 
     //create empty metadata items "sampleSets" and "transactions" for each Compoenent
@@ -81,7 +81,7 @@ int DataObject::loadHardwareTopology(QString filename)
     {
         allComponents[i]->metadata["sampleSets"] = (void*) new QMap<DataObject*,SampleSet>();
         allComponents[i]->metadata["transactions"] = (void*) new int();
-        qDebug( "collectTopoSamplesxx = %p", allComponents[i]->metadata["sampleSets"]);
+        //qDebug( "collectTopoSamplesxx = %p", allComponents[i]->metadata["sampleSets"]);
     }
     return err;
     // topo = new hwTopo();
@@ -420,10 +420,10 @@ void DataObject::collectTopoSamples()
     map<int,Thread*> threadIdMap;
     for(int i=0; i<allComponents.size(); i++)
     {
-        if(allComponents[i]->GetComponentType() == SYS_TOPO_COMPONENT_THREAD)
+        if(allComponents[i]->GetComponentType() == SYS_SAGE_COMPONENT_THREAD)
         {
             threadIdMap[allComponents[i]->GetId()] = (Thread*)allComponents[i];
-            qDebug( "threadIdMap [%d] = %p", allComponents[i]->GetId(), (Thread*)allComponents[i]);
+            //qDebug( "threadIdMap [%d] = %p", allComponents[i]->GetId(), (Thread*)allComponents[i]);
         }
     }
     qDebug( "collectTopoSamples1 = %lu", allComponents.size());
@@ -431,24 +431,24 @@ void DataObject::collectTopoSamples()
 
     for(int i=0; i<allComponents.size(); i++)
     {
-        qDebug( "collectTopoSamplesxx = %p", allComponents[i]->metadata["sampleSets"]);
+        //qDebug( "collectTopoSamplesxx = %p", allComponents[i]->metadata["sampleSets"]);
         QMap<DataObject*,SampleSet>* sampleSets = (QMap<DataObject*,SampleSet>*)allComponents[i]->metadata["sampleSets"];
         (*sampleSets)[this].totCycles = 0;
         (*sampleSets)[this].selCycles = 0;
         (*sampleSets)[this].totSamples.clear();
         (*sampleSets)[this].selSamples.clear();
         *(int*)(allComponents[i]->metadata["transactions"]) = 0;
-        // topo->allHardwareResourceNodes[i]->sampleSets[this].totCycles = 0;
-        // topo->allHardwareResourceNodes[i]->sampleSets[this].selCycles = 0;
-        // topo->allHardwareResourceNodes[i]->sampleSets[this].totSamples.clear();
-        // topo->allHardwareResourceNodes[i]->sampleSets[this].selSamples.clear();
-        // topo->allHardwareResourceNodes[i]->transactions = 0;
     }
     qDebug( "collectTopoSamples2");
 
     // Go through each sample and add it to the right topo node
     ElemIndex elem;
     QVector<qreal>::Iterator p;
+    int i = 0;
+    int j=0;
+
+    std::chrono::high_resolution_clock::time_point t_start, t_end;
+    t_start = std::chrono::high_resolution_clock::now();
     for(elem=0, p=this->begin; p!=this->end; elem++, p+=this->numDimensions)
     {
         //qDebug( "collectTopoSamples loop2 %d", elem);
@@ -464,7 +464,7 @@ void DataObject::collectTopoSamples()
 
         // Update data for serving resource
         QMap<DataObject*,SampleSet>*sampleSets = (QMap<DataObject*,SampleSet>*)t->metadata["sampleSets"];
-        qDebug( "--%llu collectTopoSamples cpu= %d cpuIndex= %d samples: %d cycles %d dse: %d", elem, cpu, cpuDim, (*sampleSets)[this].totSamples.size(), (*sampleSets)[this].totCycles, dse );
+        //qDebug( "--%llu collectTopoSamples cpu= %d cpuIndex= %d samples: %d cycles %d dse: %d", elem, cpu, cpuDim, (*sampleSets)[this].totSamples.size(), (*sampleSets)[this].totCycles, dse );
         (*sampleSets)[this].totSamples.insert(elem);
         (*sampleSets)[this].totCycles += cycles;
 
@@ -483,25 +483,20 @@ void DataObject::collectTopoSamples()
 
         // Go up to data source
         Component* c;
-        for(c = (Component*)t; c->GetParent() && c->GetComponentType() != SYS_TOPO_COMPONENT_CHIP ; c=c->GetParent())
+        for(c = (Component*)t; c->GetParent() && c->GetComponentType() != SYS_SAGE_COMPONENT_CHIP ; c=c->GetParent())
         {
             if(!selectionDefined() || selected(elem))
             {
                 *(int*)(c->metadata["transactions"])+= 1;
-                qDebug( "---%llu chip: %d  transactions: %d dse %d", elem, c->GetComponentType(), *(int*)(c->metadata["transactions"]), dse);
-
+                //qDebug( "---%llu chip: %d  transactions: %d dse %d", elem, c->GetComponentType(), *(int*)(c->metadata["transactions"]), dse);
             }
 
             volatile int type = c->GetComponentType();
-            if(type == SYS_TOPO_COMPONENT_CACHE)
-            {
-                qDebug("cache %d dse %d", ((Cache*)c)->GetCacheLevel(), dse);
-            }
 
-            if((type == SYS_TOPO_COMPONENT_CACHE && ((Cache*)c)->GetCacheLevel() == 1 && dse == 1) ||
-                    (type == SYS_TOPO_COMPONENT_CACHE && ((Cache*)c)->GetCacheLevel() == 2 && dse == 2) ||
-                    (type == SYS_TOPO_COMPONENT_CACHE && ((Cache*)c)->GetCacheLevel() == 3 && dse == 3) ||
-                    (type == SYS_TOPO_COMPONENT_NUMA && dse == 4))
+            if((type == SYS_SAGE_COMPONENT_CACHE && ((Cache*)c)->GetCacheLevel() == 1 && dse == 1) ||
+                    (type == SYS_SAGE_COMPONENT_CACHE && ((Cache*)c)->GetCacheLevel() == 2 && dse == 2) ||
+                    (type == SYS_SAGE_COMPONENT_CACHE && ((Cache*)c)->GetCacheLevel() == 3 && dse == 3) ||
+                    (type == SYS_SAGE_COMPONENT_NUMA && dse == 4))
             {
                 break;
             }
@@ -512,12 +507,20 @@ void DataObject::collectTopoSamples()
         (*sampleSets)[this].totSamples.insert(elem);
         (*sampleSets)[this].totCycles += cycles;
 
+        i++;
         if(!selectionDefined() || selected(elem))
         {
             (*sampleSets)[this].selSamples.insert(elem);
             (*sampleSets)[this].selCycles += cycles;
+
+            j++;
         }
     }
+    t_end = std::chrono::high_resolution_clock::now();
+    qDebug("totSamples; %d; selSamples; %d; time; %llu", i, j, t_end.time_since_epoch().count()-t_start.time_since_epoch().count());
+
+    qDebug( "collectTopoSamples3");
+
 }
 
 int DataObject::parseCSVFile(QString dataFileName)
@@ -587,7 +590,7 @@ int DataObject::parseCSVFile(QString dataFileName)
             {
                 int dseVal = tok.toInt(NULL,10);
                 int dse = dseDepth(dseVal);
-                qDebug("elem %d dseVal %d dse %d", elemid, dseVal, dse);
+                // qDebug("elem %d dseVal %d dse %d", elemid, dseVal, dse);
                 this->vals.push_back(dse);
             }
             else

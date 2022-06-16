@@ -70,7 +70,7 @@ void HWTopoVizWidget::frameUpdate()
     if(needsConstructNodeBoxes)
     {
         constructNodeBoxes(drawBox,
-                           dataSet->topo,
+                           dataSet->node,
                            depthValRanges,
                            depthTransRanges,
                            dataMode,
@@ -88,11 +88,11 @@ void HWTopoVizWidget::processData()
 {
     processed = false;
 
-    if(dataSet->topo == NULL)
+    if(dataSet->node == NULL)
         return;
 
     //TODO at the moment for one CPU
-    Chip* cpu = (Chip*)dataSet->topo->GetChild(0)->GetChild(1);
+    Chip* cpu = (Chip*)dataSet->node->GetChild(1);
     int maxTopoDepth = cpu->GetTopoTreeDepth();
 
     depthRange = IntRange(0,maxTopoDepth);
@@ -208,12 +208,12 @@ void HWTopoVizWidget::mouseMoveEvent(QMouseEvent* e)
     if(c)
     {
         QString label = QString::fromStdString(c->GetName());
-        if(c->GetComponentType() == SYS_TOPO_COMPONENT_CACHE)
+        if(c->GetComponentType() == SYS_SAGE_COMPONENT_CACHE)
             label += "L" + QString::number(((Cache*)c)->GetCacheLevel());
         label += " (" + QString::number(c->GetId()) + ") \n";
 
         label += "\n";
-        if(c->GetComponentType() == SYS_TOPO_COMPONENT_CACHE)
+        if(c->GetComponentType() == SYS_SAGE_COMPONENT_CACHE)
             label += "Size: " + QString::number(((Cache*)c)->GetCacheSize()) + " bytes\n";
 
         label += "\n";
@@ -261,7 +261,7 @@ void HWTopoVizWidget::calcMinMaxes()
     depthTransRanges.resize(depthRange.second - depthRange.first);
     depthTransRanges.fill(limits);
 
-    Chip* cpu = (Chip*)dataSet->topo->GetChild(0)->GetChild(1);
+    Chip* cpu = (Chip*)dataSet->node->GetChild(1);
     for(int r=0, i=depthRange.first; i<depthRange.second; r++, i++)
     {
         vector<Component*> componentsAtDepth;
@@ -294,7 +294,7 @@ void HWTopoVizWidget::calcMinMaxes()
 }
 
 void HWTopoVizWidget::constructNodeBoxes(QRectF rect,
-                                    Topology *topo,
+                                    Node *node,
                                     QVector<RealRange> &valRanges,
                                     QVector<RealRange> &transRanges,
                                     DataMode m,
@@ -304,14 +304,14 @@ void HWTopoVizWidget::constructNodeBoxes(QRectF rect,
     nbout.clear();
     lbout.clear();
 
-    if(topo == NULL)
+    if(node == NULL)
         return;
 
     float nodeMarginX = 2.0f;
     float nodeMarginY = 10.0f;
 
     //TODO at the moment for one CPU
-    Chip* cpu = (Chip*)topo->GetChild(0)->GetChild(1);
+    Chip* cpu = (Chip*)node->GetChild(1);
     int maxTopoDepth = cpu->GetTopoTreeDepth();
 
     float deltaX = 0;

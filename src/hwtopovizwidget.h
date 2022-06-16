@@ -125,7 +125,7 @@ public slots:
 private:
     void calcMinMaxes();
     void constructNodeBoxes(QRectF rect,
-                            Topology *topo,
+                            Node *node,
                             QVector<RealRange> &valRanges,
                             QVector<RealRange> &transRanges, DataMode m,
                             QVector<NodeBox> &nbout,

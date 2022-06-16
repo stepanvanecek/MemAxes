@@ -46,6 +46,8 @@
 #include <set>
 #include <vector>
 #include <assert.h>
+#include <chrono>
+
 
 #include "hwtopo.h"
 #include "util.h"
@@ -158,7 +160,7 @@ public:
 
 public:
     QStringList meta;
-    Topology *topo;
+    Node *node;
     Chip* cpu;//TODO only temporary fix - prepare for more cpus, i.e. delete this member
 
     // Counts
