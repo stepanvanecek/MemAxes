@@ -211,4 +211,29 @@ private:
     selection_mode selMode;
 };
 
+struct MitosSample {
+public:
+    int sampleId;
+    ElemIndex sourceUid;
+    QString source;
+    long long line;
+    //QString instruction;
+    //long long bytes;
+    //long long ip;
+    ElemIndex variableUid;
+    QString variable;
+    //long long buffer_size;
+    //int dims;
+    int xidx;
+    int yidx;
+    int zidx;
+    //int pid;
+    //int tid;
+    //long long time;
+    //long long addr;
+    int cpu;
+    long long latency;
+    int data_src; //TODO enum?
+};
+
 #endif // DATAOBJECT_H

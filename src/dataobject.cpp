@@ -570,6 +570,69 @@ int DataObject::parseCSVFile(QString dataFileName)
             return -1;
         }
 
+        MitosSample * s = new MitosSample();
+        s->sampleId = elemid;
+        s->sourceUid = createUniqueID(varVec,lineValues[sourceDim]);
+        s->source = lineValues[sourceDim];
+        s->line = lineValues[lineDim]->toLongLong();
+        //instruction
+        //bytes
+        //ip
+        s->variableUid = createUniqueID(varVec,lineValues[variableDim]);
+        s->variable = lineValues[variableDim];
+        //buffer_size
+        //dims
+        s->xidx = lineValues[xDim]->toInt();
+        s->yidx = lineValues[yDim]->toInt();
+        s->zidx = lineValues[zDim]->toInt();
+        //pid
+        //tid
+        //time
+        //addr
+        s->cpu = lineValues[cpuDim]->toInt();
+        s->latency = lineValues[latencyDim]->toLongLong();
+        s->data_src = dseDepth(lineValues[dataSourceDim]toInt(NULL,10));
+
+        Component * compTarget = FindSubcomponentById(SYS_SAGE_COMPONENT_THREAD, s->cpu);
+        Component * compSrc = compTarget;//connect with the right memory/cache
+        while(true){
+            if(compSrc == NULL)
+                break;
+            compSrc = compSrc->GetParent();
+            if(s->data_src == 1
+                && compSrc->GetComponentType() == SYS_SAGE_COMPONENT_CACHE
+                && ((Cache*)compSrc)->GetCacheLevel()==1) break;//L1
+            else if(s->data_src == 2
+                && compSrc->GetComponentType() == SYS_SAGE_COMPONENT_CACHE
+                && ((Cache*)compSrc)->GetCacheLevel()==2) break;//L2
+            else if(s->data_src == 3
+                && compSrc->GetComponentType() == SYS_SAGE_COMPONENT_CACHE
+                && ((Cache*)compSrc)->GetCacheLevel()==3) break;//L3
+            else if(s->data_src == 4
+                && (compSrc->GetComponentType() == SYS_SAGE_COMPONENT_NUMA
+                || compSrc->GetComponentType() == SYS_SAGE_COMPONENT_CHIP)) break;//main memory
+        }
+        if(compSrc == NULL || compTarget == NULL)
+        {
+            //TODO wanring skipping this sample
+            delete s;
+        }
+        else
+        {
+            DataPath * dp = compTarget->GetDpByType(SYS_SAGE_MITOS_SAMPLE, SYS_SAGE_DATAPATH_INCOMING);
+            if(dp == NULL){ //no sample connecting the two components
+                dp = NewDataPath(compSrc, compTarget, SYS_SAGE_DATAPATH_ORIENTED, SYS_SAGE_MITOS_SAMPLE);
+                dp->attrib["mitos_samples"] = (void*)new vector<MitosSample*>();
+                dp->attrib["mitos_cycles"] = (void*)new int();
+            }
+            (vector<MitosSample*>*)(dp->attrib["mitos_samples"])->push_back(s);
+            *(vector<MitosSample*>*)(dp->attrib["mitos_cycles"]) += s->latency;
+        }
+
+
+
+
+
         // Process individual dimensions differently
         for(int i=0; i<lineValues.size(); i++)
         {
