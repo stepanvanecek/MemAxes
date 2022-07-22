@@ -206,9 +206,7 @@ void MainWindow::selectionChangedSlot()
 
 void MainWindow::visibilityChangedSlot()
 {
-    qDebug( "visibilityChangedSlot");
     dataSet->visibilityChanged();
-    qDebug( "visibilityChangedSlot2");
     emit visibilityChangedSig();
 }
 
@@ -243,16 +241,12 @@ int MainWindow::loadData()
         errdiag("Error loading dataset: "+dataSetDir);
         return err;
     }
-    qDebug( "mld3");
     for(int i=0; i<vizWidgets.size(); i++)
     {
         vizWidgets[i]->processData();
         vizWidgets[i]->update();
     }
-    qDebug( "mld4");
     visibilityChangedSlot();
-    qDebug( "mld5");
-    usleep(1000000);
     return 0;
 }
 

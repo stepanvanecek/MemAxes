@@ -220,9 +220,24 @@ void HWTopoVizWidget::mouseMoveEvent(QMouseEvent* e)
 
         int numCycles = 0;
         int numSamples = 0;
-        QMap<DataObject*,SampleSet>*sampleSets = (QMap<DataObject*,SampleSet>*)c->metadata["sampleSets"];
-        numSamples += (*sampleSets)[dataSet].selSamples.size();
-        numCycles += (*sampleSets)[dataSet].selCycles;
+        //QMap<DataObject*,SampleSet>*sampleSets = (QMap<DataObject*,SampleSet>*)c->attrib["sampleSets"];
+        // numSamples += (*sampleSets)[dataSet].selSamples.size();
+        // numCycles += (*sampleSets)[dataSet].selCycles;
+
+        int direction;
+        if(c->GetComponentType() == SYS_SAGE_COMPONENT_THREAD)
+        {
+            direction = SYS_SAGE_DATAPATH_INCOMING;
+        }else {
+            direction = SYS_SAGE_DATAPATH_OUTGOING;
+        }
+        vector<DataPath*> dp_vec;
+        c->GetAllDpByType(&dp_vec, SYS_SAGE_MITOS_SAMPLE, direction);
+        for(DataPath* dp : dp_vec) {
+            SampleSet *ss = (SampleSet*)dp->attrib["sample_set"];
+            numSamples += ss->selSamples.size();
+            numCycles += ss->selCycles;
+        }
 
         label += "Samples: " + QString::number(numSamples) + "\n";
         label += "Cycles: " + QString::number(numCycles) + "\n";
@@ -270,12 +285,29 @@ void HWTopoVizWidget::calcMinMaxes()
         for(int j=widthRange[r].first; j<widthRange[r].second; j++)
         {
             Component * c = componentsAtDepth[j];
-            QMap<DataObject*,SampleSet>*sampleSets = (QMap<DataObject*,SampleSet>*)c->metadata["sampleSets"];
-            if(!sampleSets->contains(dataSet) )
-                continue;
+            // QMap<DataObject*,SampleSet>*sampleSets = (QMap<DataObject*,SampleSet>*)c->attrib["sampleSets"];
+            // if(!sampleSets->contains(dataSet) )
+            //     continue;
+            // ElemSet &samples = (*sampleSets)[dataSet].selSamples;
+            // int numCycles = (*sampleSets)[dataSet].selCycles;
 
-            ElemSet &samples = (*sampleSets)[dataSet].selSamples;
-            int numCycles = (*sampleSets)[dataSet].selCycles;
+            ElemSet samples;
+            int numCycles = 0;
+            int direction;
+            if(c->GetComponentType() == SYS_SAGE_COMPONENT_THREAD)
+            {
+                direction = SYS_SAGE_DATAPATH_INCOMING;
+            }else {
+                direction = SYS_SAGE_DATAPATH_OUTGOING;
+            }
+            vector<DataPath*> dp_vec;
+            c->GetAllDpByType(&dp_vec, SYS_SAGE_MITOS_SAMPLE, direction);
+            for(DataPath* dp : dp_vec) {
+                SampleSet *ss = (SampleSet*)dp->attrib["sample_set"];
+                samples.insert(ss->selSamples.begin(),ss->selSamples.end());
+                numCycles += ss->selCycles;
+            }
+
 
             qreal val = (dataMode == COLORBY_CYCLES) ? numCycles : samples.size();
             //val = (qreal)(*numCycles) / (qreal)samples->size();
@@ -283,7 +315,7 @@ void HWTopoVizWidget::calcMinMaxes()
             depthValRanges[i].first=0;//min(depthValRanges[i].first,val);
             depthValRanges[i].second=max(depthValRanges[i].second,val);
 
-            qreal trans = *(int*)(c->metadata["transactions"]);
+            qreal trans = *(int*)(c->attrib["transactions"]);
             depthTransRanges[i].first=0;//min(depthTransRanges[i].first,trans);
             depthTransRanges[i].second=max(depthTransRanges[i].second,trans);
         }
@@ -336,9 +368,22 @@ void HWTopoVizWidget::constructNodeBoxes(QRectF rect,
             // Get value by cycles or samples
             int numCycles = 0;
             int numSamples = 0;
-            QMap<DataObject*,SampleSet>* sampleSets = (QMap<DataObject*,SampleSet>*)nb.component->metadata["sampleSets"];
-            numSamples += (*sampleSets)[dataSet].selSamples.size();
-            numCycles += (*sampleSets)[dataSet].selCycles;
+            // QMap<DataObject*,SampleSet>* sampleSets = (QMap<DataObject*,SampleSet>*)nb.component->attrib["sampleSets"];
+            // numSamples += (*sampleSets)[dataSet].selSamples.size();
+            // numCycles += (*sampleSets)[dataSet].selCycles;
+            int direction;
+            if(nb.component->GetComponentType() == SYS_SAGE_COMPONENT_THREAD){
+                direction = SYS_SAGE_DATAPATH_INCOMING;
+            }else {
+                direction = SYS_SAGE_DATAPATH_OUTGOING;
+            }
+            vector<DataPath*> dp_vec;
+            nb.component->GetAllDpByType(&dp_vec, SYS_SAGE_MITOS_SAMPLE, direction);
+            for(DataPath* dp : dp_vec) {
+                SampleSet *ss = (SampleSet*)dp->attrib["sample_set"];
+                numSamples += ss->selSamples.size();
+                numCycles += ss->selCycles;
+            }
 
             qreal unscaledval = (m == COLORBY_CYCLES) ? numCycles : numSamples;
             nb.val = scale(unscaledval,
@@ -368,7 +413,7 @@ void HWTopoVizWidget::constructNodeBoxes(QRectF rect,
 
                 lb.box.adjust(nodeMarginX,-nodeMarginY,-nodeMarginX,0);
 
-                float linkWidth = scale(*(int*)(nb.component->metadata["transactions"]),
+                float linkWidth = scale(*(int*)(nb.component->attrib["transactions"]),
                                         transRanges.at(i).first,
                                         transRanges.at(i).second,
                                         1.0f,
